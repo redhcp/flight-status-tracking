@@ -1,0 +1,36 @@
+name: Flight Monitor
+
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-flight:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          AIRLABS_API_KEY: ${{ secrets.AIRLABS_API_KEY }}
+          FLIGHT_NUMBER: ${{ secrets.FLIGHT }}
+          FLIGHT_DATE: ${{ secrets.FLIGHT_DATE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python monitor.py
+
+      - name: Commit state
+        run: |
+          git config --global user.name "flight-bot"
+          git config --global user.email "bot@github"
+          git add status.json
+          git commit -m "update flight state" || exit 0
+          git push
