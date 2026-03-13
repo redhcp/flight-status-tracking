@@ -3,11 +3,13 @@ import json
 import requests
 from datetime import datetime, timedelta
 
+
 API_KEY = os.environ["AIRLABS_API_KEY"]
-FLIGHT = os.environ["FLIGHT_NUMBER"]
+FLIGHTS = os.environ["FLIGHTS"]
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
 
 STATE_FILE = "status.json"
 
@@ -30,39 +32,38 @@ def send(msg):
     requests.post(url, json=payload, timeout=10)
 
 
-def get_flight():
+def get_flight(flight, date):
 
     url = "https://airlabs.co/api/v9/flight"
 
     params = {
         "api_key": API_KEY,
-        "flight_iata": FLIGHT
+        "flight_iata": flight,
+        "flight_date": date
     }
 
     r = requests.get(url, params=params, timeout=15)
     data = r.json()
 
     if not data.get("response"):
-        raise Exception("Flight not found")
+        return None
 
     f = data["response"]
 
     return {
         "status": f.get("status"),
         "delay": f.get("dep_delay"),
-        "arrival_airport": f.get("arr_name"),
-        "arrival_city": f.get("arr_city")
+        "arrival_airport": f.get("arr_name")
     }
-
 
 def now_tz(offset):
     return (datetime.utcnow() + timedelta(hours=offset)).strftime("%H:%M")
 
 
-def build_message(status, airport):
+def build_message(flight, status, airport):
 
     return (
-        f"✈ {FLIGHT}\n"
+        f"✈ {flight}\n"
         f"🛬 Flight {status.upper()}\n\n"
         f"Arrival airport: {airport}\n\n"
         f"Checked: {now_tz(2)} (+2) / {now_tz(-3)} (-3)"
@@ -71,43 +72,51 @@ def build_message(status, airport):
 
 def main():
 
-    current = get_flight()
     state = load_state()
 
-    last_status = state.get("status")
-    last_delay = state.get("delay")
+    for entry in FLIGHTS:
 
-    status = current["status"]
-    delay = current["delay"]
-    airport = current["arrival_airport"]
+        flight, date = entry.split(":")
 
-    # Cancelled
-    if status == "cancelled" and last_status != "cancelled":
-        send(build_message("cancelled", airport))
+        key = f"{flight}_{date}"
 
-    # Landed
-    if status == "landed" and last_status != "landed":
-        send(build_message("landed", airport))
+        current = get_flight(flight, date)
 
-    # Delay
-    if delay and delay != last_delay:
-        msg = (
-            f"✈ {FLIGHT}\n"
-            f"⚠ Flight DELAYED\n\n"
-            f"Delay: {delay} minutes\n"
-            f"Arrival airport: {airport}\n\n"
-            f"Checked: {now_tz(2)} (+2) / {now_tz(-3)} (-3)"
-        )
-        send(msg)
+        if not current:
+            continue
 
-    # Generic status change
-    if status != last_status:
-        send(build_message(status, airport))
+        last = state.get(key, {})
 
-    save_state({
-        "status": status,
-        "delay": delay
-    })
+        last_status = last.get("status")
+        last_delay = last.get("delay")
+
+        status = current["status"]
+        delay = current["delay"]
+        airport = current["arrival_airport"]
+
+        if status == "cancelled" and last_status != "cancelled":
+            send(build_message(flight, status, airport))
+
+        if status == "landed" and last_status != "landed":
+            send(build_message(flight, status, airport))
+
+        if delay and delay != last_delay:
+            send(
+                f"✈ {flight}\n"
+                f"⚠ Flight DELAYED\n\n"
+                f"Delay: {delay} minutes\n"
+                f"Arrival airport: {airport}"
+            )
+
+        if status != last_status:
+            send(build_message(flight, status, airport))
+
+        state[key] = {
+            "status": status,
+            "delay": delay
+        }
+
+    save_state(state)
 
 
 if __name__ == "__main__":

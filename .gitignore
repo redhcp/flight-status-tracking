@@ -210,3 +210,4 @@ monitor-cloud.py
 monitor-aviationstack.py
 /.vscode
 .vscde
+monitor-local.py
