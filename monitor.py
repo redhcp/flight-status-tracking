@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 
 API_KEY = os.environ["AIRLABS_API_KEY"]
-FLIGHTS = os.environ["FLIGHTS"]
+FLIGHTS = os.environ["FLIGHTS"].split(",")
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
