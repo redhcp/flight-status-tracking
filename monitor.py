@@ -34,12 +34,12 @@ def send(msg):
 
 def get_flight(flight, date):
 
-    url = "https://airlabs.co/api/v9/flight"
+    url = "https://airlabs.co/api/v9/schedules"
 
     params = {
         "api_key": API_KEY,
         "flight_iata": flight,
-        "flight_date": date
+        "dep_date": date
     }
 
     r = requests.get(url, params=params, timeout=15)
@@ -48,7 +48,7 @@ def get_flight(flight, date):
     if not data.get("response"):
         return None
 
-    f = data["response"]
+    f = data["response"][0]
 
     return {
         "status": f.get("status"),
@@ -60,10 +60,11 @@ def now_tz(offset):
     return (datetime.utcnow() + timedelta(hours=offset)).strftime("%H:%M")
 
 
-def build_message(flight, status, airport):
+def build_message(flight, date, status, airport):
 
     return (
         f"✈ {flight}\n"
+        f"📅 Flight date: {date}\n"
         f"🛬 Flight {status.upper()}\n\n"
         f"Arrival airport: {airport}\n\n"
         f"Checked: {now_tz(2)} (+2) / {now_tz(-3)} (-3)"
@@ -95,10 +96,10 @@ def main():
         airport = current["arrival_airport"]
 
         if status == "cancelled" and last_status != "cancelled":
-            send(build_message(flight, status, airport))
+            send(build_message(flight, date, status, airport))
 
         if status == "landed" and last_status != "landed":
-            send(build_message(flight, status, airport))
+            send(build_message(flight, date, status, airport))
 
         if delay and delay != last_delay:
             send(
@@ -109,7 +110,7 @@ def main():
             )
 
         if status != last_status:
-            send(build_message(flight, status, airport))
+            send(build_message(flight, date, status, airport))
 
         state[key] = {
             "status": status,
