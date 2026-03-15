@@ -36,16 +36,12 @@ def get_flight(flight, date):
 
     url = "https://airlabs.co/api/v9/schedules"
 
-    params = {
-        "api_key": API_KEY,
-        "flight_iata": flight,
-        "dep_date": date
-    }
+    params = {"api_key": API_KEY, "flight_iata": flight, "dep_date": date}
 
     r = requests.get(url, params=params, timeout=15)
     data = r.json()
 
-    if not data.get("response"):
+    if "response" not in data or not data["response"]:
         return None
 
     f = data["response"][0]
@@ -53,8 +49,9 @@ def get_flight(flight, date):
     return {
         "status": f.get("status"),
         "delay": f.get("dep_delay"),
-        "arrival_airport": f.get("arr_name")
+        "arrival_airport": f.get("arr_name"),
     }
+
 
 def now_tz(offset):
     return (datetime.utcnow() + timedelta(hours=offset)).strftime("%H:%M")
@@ -74,22 +71,39 @@ def build_message(flight, date, status, airport):
 def main():
 
     state = load_state()
+    print("Flights configured:", FLIGHTS)
 
     for entry in FLIGHTS:
 
+        entry = entry.strip()
+
         flight, date = entry.split(":")
 
+        flight = flight.strip()
+        date = date.strip()
+
         key = f"{flight}_{date}"
+        print("Processing flight:", entry)
 
-        current = get_flight(flight, date)
-
-        if not current:
+        try:
+            current = get_flight(flight, date)
+        except Exception as e:
+            print("API error:", e)
             continue
 
         last = state.get(key, {})
 
         last_status = last.get("status")
         last_delay = last.get("delay")
+
+        current = get_flight(flight, date)
+
+        print(f"Checking {flight} {date}")
+        print(current)
+
+        if current is None:
+            print(f"No data for {flight} on {date}")
+            continue
 
         status = current["status"]
         delay = current["delay"]
@@ -112,10 +126,7 @@ def main():
         if status != last_status:
             send(build_message(flight, date, status, airport))
 
-        state[key] = {
-            "status": status,
-            "delay": delay
-        }
+        state[key] = {"status": status, "delay": delay}
 
     save_state(state)
 
